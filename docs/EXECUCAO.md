@@ -14,7 +14,7 @@ A auditoria **nao instala nem atualiza** pacotes, nao modifica configuracoes rem
 ansible-playbook -i 'vps3015.maxdominios.com,' playbooks/maintenance.yml
 ```
 
-Etapas da manutencao: validar cPanel e sistema; coletar servicos antes; identificar CloudLinux e Imunify360; executar upcp; atualizar DNF incluindo pacotes CloudLinux presentes; atualizar regras ModSecurity do Imunify360 quando instalado; limpar cache DNF; coletar servicos depois; verificar reboot/kernel; gerar relatorio local.
+Etapas da manutencao: validar cPanel e sistema; coletar servicos antes; identificar CloudLinux e Imunify360; atualizar DNF incluindo pacotes CloudLinux presentes; executar upcp; atualizar regras ModSecurity do Imunify360 quando instalado; limpar cache DNF; coletar servicos depois; verificar reboot/kernel; gerar relatorio local.
 
 Os pacotes CloudLinux sao atualizados por DNF conforme repositorios configurados. Nao se executa conversao de SO, `cagefsctl --force-update` nem alteracoes estruturais. Imunify360 ausente e ignorado. Um erro em atualizacao interrompe as etapas seguintes e e registrado no relatorio.
 
