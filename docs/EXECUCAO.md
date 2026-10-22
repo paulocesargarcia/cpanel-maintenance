@@ -1,80 +1,33 @@
-# Execucao local com Ansible
+# Execucao local
 
-## Modelo de acesso
-
-O repositorio contem apenas automacao e documentacao. Nao ha inventario versionado. O ansible.cfg usa remote_user=root, remote_port=22022 e interpreter_python=auto_silent. O comando `-i 'hostname,'` informa os servidores em tempo de execucao. Use chaves SSH existentes na sua maquina e valide a identidade SSH dos hosts.
-
-Aliases definidos somente em `~/.zshrc` (por exemplo, `alias vps3015="ssh -p22022 root@vps3015.maxdominios.com"`) **nao sao interpretados pelo Ansible**. Use hostname/porta/usuario no comando ou configure o alias em `~/.ssh/config`.
-
-## Pre-requisitos
-
-- Ansible no computador de administracao (macOS/Linux).
-- Chave SSH autorizada no servidor; usuario root ou sudo disponivel.
-- Python compativel no servidor para os modulos Ansible.
-- Backups validos, avaliacao das atualizacoes e janela de manutencao. O DNF e o upcp podem reiniciar servicos.
-- Executar dentro da raiz do repositorio para carregar o `ansible.cfg`.
-
-## Clonar e atualizar o projeto
+Nao existe inventario versionado. O Ansible roda na sua maquina com chaves SSH locais. O arquivo `ansible.cfg` define `remote_user=root`, `remote_port=22022`, `interpreter_python=auto_silent` e verifica chaves SSH.
 
 ```bash
-git clone git@github.com:paulocesargarcia/cpanel-maintenance.git
-cd cpanel-maintenance
-git status
 git pull --ff-only
+ansible-playbook -i 'vps3015.maxdominios.com,' playbooks/audit.yml --syntax-check
+ansible-playbook -i 'vps3015.maxdominios.com,' playbooks/audit.yml
 ```
 
-Antes de executar em producao, revise alteracoes do projeto e prefira um commit/tag testado.
-
-## Teste inicial no vps3015
+A auditoria **nao instala nem atualiza** pacotes, nao modifica configuracoes remotas e nao reinicia servicos. Requer root para descobrir servicos/estado do sistema. Para executar atualizacoes reais, com backups e janela de manutencao:
 
 ```bash
-ansible --version
-ansible-playbook -i 'vps3015.maxdominios.com,' playbooks/maintenance.yml --syntax-check
-ansible all -i 'vps3015.maxdominios.com,' -m ping
+ansible-playbook -i 'vps3015.maxdominios.com,' playbooks/maintenance.yml
 ```
 
-A virgula apos o hostname e obrigatoria em inventarios inline. `pong` valida SSH/autenticacao/Python remoto, mas nao confirma sucesso das atualizacoes.
+Etapas da manutencao: validar cPanel e sistema; coletar servicos antes; identificar CloudLinux e Imunify360; executar upcp; atualizar DNF incluindo pacotes CloudLinux presentes; atualizar regras ModSecurity do Imunify360 quando instalado; limpar cache DNF; coletar servicos depois; verificar reboot/kernel; gerar relatorio local.
 
-## Executar toda a manutencao
+Os pacotes CloudLinux sao atualizados por DNF conforme repositorios configurados. Nao se executa conversao de SO, `cagefsctl --force-update` nem alteracoes estruturais. Imunify360 ausente e ignorado. Um erro em atualizacao interrompe as etapas seguintes e e registrado no relatorio.
 
-```bash
-ansible-playbook \
-  -i 'vps3015.maxdominios.com,' \
-  playbooks/maintenance.yml
-```
+## Relatorios
 
-Execute somente em janela apropriada: o playbook **faz atualizacoes reais** de cPanel e pacotes. Nao reinicia automaticamente o servidor.
+Gerados no controlador em `reports/HOST-DATA.json`, com permissao `0600`. O diretorio tem permissao `0700` e esta no `.gitignore`. Contem status de execucao, CloudLinux, Imunify360, kernel/reboot e estados de servicos antes/depois.
 
-## Apenas uma etapa
+Os servicos verificados por coleta de fatos incluem cPanel, Apache, LiteSpeed, MariaDB/MySQL, Exim, Dovecot e Imunify360, quando detectados. Nao reinicia ou repara servicos automaticamente.
 
-As tags disponiveis sao `cpanel`, `system`, `imunify`, `cleanup` e `reboot-check`.
+O retorno do reboot e interpretado como 0 (nao indicado), 1 (indicado), demais (inconclusivo). Compare tambem kernels e avalie manualmente necessidade de reinicio. O campo de kernel de boot retorna caminho completo.
 
-```bash
-ansible-playbook -i 'vps3015.maxdominios.com,' playbooks/maintenance.yml --tags reboot-check
-```
+## Requisitos e seguranca
 
-As validacoes iniciais sem tags nao sao executadas quando voce seleciona somente uma tag; use a execucao completa para a manutencao padrao.
+Ansible com colecao builtin, acesso SSH por chave e Python compatível nos hosts. O playbook usa `serial: 1` e `any_errors_fatal: true`. Nunca execute atualizacoes sem revisar os commits. Nenhum reboot automatico esta implementado.
 
-## Diversos servidores sem inventario versionado
-
-```bash
-ansible-playbook -i 'ns1003.maxdominios.com,ns1009.maxdominios.com,' playbooks/maintenance.yml
-```
-
-O playbook usa `serial: 1` e `any_errors_fatal: true`: atualiza um servidor por vez e para em caso de erro. O exemplo pressupoe a mesma porta/usuario nos dois destinos.
-
-Opcionalmente, guarde um inventario **somente na maquina local**, fora do repositorio, e indique seu caminho com `-i`.
-
-## Configuracao padrao
-
-No diretorio do projeto, confira os parametros carregados com `ansible-config dump --only-changed`. O arquivo ansible.cfg define root e porta 22022; excecoes podem ser configuradas localmente.
-
-## Python
-
-O arquivo `ansible.cfg` define `interpreter_python = auto_silent`. O Ansible identifica um Python remoto compativel para cada host; nao e necessariamente a versao mais nova. Isso elimina apenas o aviso informativo de descoberta, nao erros reais.
-
-## Validacao apos execucao
-
-Analise o resumo `PLAY RECAP`, a saida da tarefa de reboot e a comparacao entre kernel em uso e kernel padrao de boot. `dnf needs-restarting -r` pode nao estar disponivel em todas as instalacoes; nesse caso a avaliacao de reboot fica limitada. Consulte tambem o estado dos servicos criticos cPanel, web, banco e e-mail antes de considerar a manutencao concluida.
-
-O parametro `--check` nao simula de forma confiavel tarefas imperativas como `upcp` e atualizacao de regras, portanto nao substitui o teste em ambiente controlado.
+Alias do ZSH nao e interpretado como alias SSH. Use nome DNS ou defina `Host` no seu `~/.ssh/config`.
