@@ -1,0 +1,103 @@
+---
+# Inventario fornecido somente pela maquina controladora.
+# Exemplo: ansible-playbook -i 'ns1003,' playbooks/maintenance.yml
+- name: Manutencao cPanel CloudLinux
+  hosts: all
+  gather_facts: true
+  become: true
+  serial: 1
+  any_errors_fatal: true
+
+  pre_tasks:
+    - name: Exigir Linux RedHat-like
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['os_family'] == 'RedHat'
+        fail_msg: "Playbook destinado a AlmaLinux/CloudLinux com DNF."
+
+    - name: Confirmar que cPanel esta instalado
+      ansible.builtin.stat:
+        path: /usr/local/cpanel/scripts/upcp
+      register: upcp_script
+
+    - name: Interromper se nao for um servidor cPanel
+      ansible.builtin.assert:
+        that: upcp_script.stat.exists
+        fail_msg: "cPanel nao encontrado. Nenhuma atualizacao executada."
+
+  tasks:
+    - name: Atualizar cPanel/WHM (canal configurado no servidor)
+      ansible.builtin.command:
+        cmd: /usr/local/cpanel/scripts/upcp
+      register: cpanel_update
+      changed_when: true
+      tags: [cpanel]
+
+    - name: Atualizar pacotes do sistema com DNF
+      ansible.builtin.dnf:
+        name: '*'
+        state: latest
+        update_cache: true
+      register: packages_update
+      tags: [system]
+
+    - name: Localizar agente Imunify360
+      ansible.builtin.shell: command -v imunify360-agent
+      register: imunify_available
+      changed_when: false
+      failed_when: false
+      tags: [imunify]
+
+    - name: Atualizar regras ModSecurity do Imunify360
+      ansible.builtin.command:
+        cmd: imunify360-agent update --force modsec-rules
+      when: imunify_available.rc == 0
+      changed_when: true
+      tags: [imunify]
+
+    - name: Limpar cache do DNF
+      ansible.builtin.command:
+        cmd: dnf clean all
+      changed_when: true
+      tags: [cleanup]
+
+    - name: Verificar se o utilitario needs-restarting esta presente
+      ansible.builtin.shell: command -v needs-restarting || dnf needs-restarting --help >/dev/null 2>&1
+      register: needs_restarting_available
+      changed_when: false
+      failed_when: false
+      tags: [reboot-check]
+
+    - name: Verificar necessidade de reboot
+      ansible.builtin.command:
+        cmd: dnf needs-restarting -r
+      register: reboot_status
+      changed_when: false
+      failed_when: reboot_status.rc not in [0, 1]
+      when: needs_restarting_available.rc == 0
+      tags: [reboot-check]
+
+    - name: Obter kernel em execucao
+      ansible.builtin.command:
+        cmd: uname -r
+      register: running_kernel
+      changed_when: false
+      tags: [reboot-check]
+
+    - name: Obter kernel padrao de boot
+      ansible.builtin.command:
+        cmd: grubby --default-kernel
+      register: boot_kernel
+      changed_when: false
+      failed_when: false
+      tags: [reboot-check]
+
+    - name: Resumo da manutencao (sem reboot automatico)
+      ansible.builtin.debug:
+        msg:
+          - "Host: {{ inventory_hostname }}"
+          - "Reboot sugerido pelo DNF: {{ 'SIM' if reboot_status.rc | default(2) == 1 else ('NAO' if reboot_status.rc | default(2) == 0 else 'NAO AVALIADO') }}"
+          - "Kernel em uso: {{ running_kernel.stdout }}"
+          - "Kernel de boot: {{ boot_kernel.stdout | default('Nao identificado') }}"
+          - "Atencao: compare os kernels e programe reboot manual quando necessario."
+      tags: [reboot-check]
