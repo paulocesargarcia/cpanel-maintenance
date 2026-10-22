@@ -134,6 +134,20 @@
           changed_when: false
           failed_when: false
 
+        - name: Identificar servicos que deixaram de executar
+          ansible.builtin.set_fact:
+            failed_services: "{{ (failed_services | default([])) + [item] }}"
+          loop: "{{ managed_services }}"
+          when:
+            - (initial_services.ansible_facts.services.get(item, {}).get('state', 'absent')) == 'running'
+            - (final_services.ansible_facts.services.get(item, {}).get('state', 'absent')) != 'running'
+
+        - name: Marcar falha em servicos anteriormente ativos
+          ansible.builtin.set_fact:
+            maintenance_status: FALHA
+            maintenance_error: "{{ maintenance_error }} Servicos deixaram de executar: {{ failed_services | join(', ') }}"
+          when: (failed_services | default([])) | length > 0
+
         - name: Criar diretorio local de relatorios
           ansible.builtin.file:
             path: "{{ playbook_dir }}/../reports"
@@ -163,6 +177,7 @@
               boot_kernel: "{{ kernel_boot.stdout | default('indisponivel') }}"
               reboot_check_rc: "{{ reboot_result.rc | default('nao executado') }}"
               reboot_check_note: "0 = nao indicado; 1 = indicado; outros = inconclusivo"
+              failed_services: "{{ failed_services | default([]) }}"
               services_before: "{{ initial_services.ansible_facts.services | default({}) | dict2items | selectattr('key', 'in', managed_services) | items2dict }}"
               services_after: "{{ final_services.ansible_facts.services | default({}) | dict2items | selectattr('key', 'in', managed_services) | items2dict }}"
           delegate_to: localhost
