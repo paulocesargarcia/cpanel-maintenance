@@ -1,25 +1,25 @@
 # cPanel Maintenance
 
-Automacao de manutencao de servidores cPanel/WHM com CloudLinux/AlmaLinux utilizando Ansible a partir do computador do administrador.
+Automacao de manutencao de servidores cPanel/WHM com CloudLinux/AlmaLinux usando Ansible na estacao local.
 
-**Privacidade:** o repositorio nao armazena inventarios de servidores, senhas, chaves SSH nem configuracoes especificas dos hosts. O inventario e fornecido localmente por `-i`.
+O repositorio **nao contem inventario, chaves SSH nem credenciais**. O inventario e informado somente na execucao com `-i`.
 
-## Execucao completa (exemplo vps3015)
+## Padroes de conexao
 
-No computador local, com Ansible instalado e acesso SSH por chave:
+No `ansible.cfg`, `remote_user = root`, `remote_port = 22022` e `interpreter_python = auto_silent`. A autenticacao usa a chave SSH disponivel na estacao local. Os valores podem ser sobrescritos por host quando necessario.
+
+## Teste e execucao completa
 
 ```bash
 git clone git@github.com:paulocesargarcia/cpanel-maintenance.git
 cd cpanel-maintenance
-ansible-playbook -i 'vps3015.maxdominios.com,' -u root -e 'ansible_port=22022' playbooks/maintenance.yml --syntax-check
-ansible all -i 'vps3015.maxdominios.com,' -u root -e 'ansible_port=22022' -m ping
-ansible-playbook -i 'vps3015.maxdominios.com,' -u root -e 'ansible_port=22022' playbooks/maintenance.yml
+ansible-playbook -i 'vps3015.maxdominios.com,' playbooks/maintenance.yml --syntax-check
+ansible all -i 'vps3015.maxdominios.com,' -m ping
+ansible-playbook -i 'vps3015.maxdominios.com,' playbooks/maintenance.yml
 ```
 
-Para uma instalacao ja clonada, revise as alteracoes antes de `git pull --ff-only`. A virgula no inventario inline e obrigatoria.
+A virgula no inventario inline e obrigatoria. Em instalacoes existentes, revise as alteracoes e utilize `git pull --ff-only`.
 
-O playbook valida a plataforma e o cPanel, executa `upcp`, atualiza pacotes com DNF, tenta atualizar regras ModSecurity do Imunify360, limpa o cache DNF e verifica reboot/kernel. **Nao executa reboot automaticamente.** Atualizacoes podem reiniciar servicos: use janela de manutencao e confirme backups.
+O playbook valida a plataforma e o cPanel, executa `upcp`, atualiza pacotes DNF, regras ModSecurity do Imunify360, limpa o cache e verifica necessidade de reboot. **Nao reinicia automaticamente**, mas atualizacoes podem reiniciar servicos. Use janela de manutencao e confirme backups.
 
-O `ansible.cfg` define `interpreter_python = auto_silent`: usa descoberta automatica do interpretador compativel de cada servidor, sem fixar a versao nem emitir o aviso de descoberta.
-
-**Leia:** [Guia de execucao](docs/EXECUCAO.md).
+Leia [a documentacao de execucao](docs/EXECUCAO.md).
