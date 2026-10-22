@@ -1,103 +1,184 @@
 ---
-# Inventario fornecido somente pela maquina controladora.
-# Exemplo: ansible-playbook -i 'ns1003,' playbooks/maintenance.yml
-- name: Manutencao cPanel CloudLinux
+- name: Manutencao ou auditoria de servidores cPanel
   hosts: all
   gather_facts: true
   become: true
   serial: 1
   any_errors_fatal: true
-
-  pre_tasks:
-    - name: Exigir Linux RedHat-like
-      ansible.builtin.assert:
-        that:
-          - ansible_facts['os_family'] == 'RedHat'
-        fail_msg: "Playbook destinado a AlmaLinux/CloudLinux com DNF."
-
-    - name: Confirmar que cPanel esta instalado
-      ansible.builtin.stat:
-        path: /usr/local/cpanel/scripts/upcp
-      register: upcp_script
-
-    - name: Interromper se nao for um servidor cPanel
-      ansible.builtin.assert:
-        that: upcp_script.stat.exists
-        fail_msg: "cPanel nao encontrado. Nenhuma atualizacao executada."
-
+  vars:
+    audit_only: false
+    managed_services:
+      - cpanel.service
+      - httpd.service
+      - lshttpd.service
+      - mariadb.service
+      - mysql.service
+      - exim.service
+      - dovecot.service
+      - imunify360.service
   tasks:
-    - name: Atualizar cPanel/WHM (canal configurado no servidor)
-      ansible.builtin.command:
-        cmd: /usr/local/cpanel/scripts/upcp
-      register: cpanel_update
-      changed_when: true
-      tags: [cpanel]
+    - name: Validar plataforma e instalacao cPanel
+      block:
+        - ansible.builtin.assert:
+            that:
+              - ansible_facts['os_family'] == 'RedHat'
+            fail_msg: "Requer AlmaLinux/CloudLinux (familia RedHat)."
+        - ansible.builtin.stat:
+            path: /usr/local/cpanel/scripts/upcp
+          register: upcp_script
+        - ansible.builtin.assert:
+            that: upcp_script.stat.exists
+            fail_msg: "cPanel ausente. Operacao interrompida."
 
-    - name: Atualizar pacotes do sistema com DNF
-      ansible.builtin.dnf:
-        name: '*'
-        state: latest
-        update_cache: true
-      register: packages_update
-      tags: [system]
+    - name: Registrar estado inicial dos servicos
+      ansible.builtin.service_facts:
+      register: initial_services
 
-    - name: Localizar agente Imunify360
-      ansible.builtin.shell: command -v imunify360-agent
-      register: imunify_available
+    - name: Identificar CloudLinux sem alterar o sistema
+      ansible.builtin.command: rpm -q cloudlinux-release
+      register: cloudlinux_release
       changed_when: false
-      failed_when: false
-      tags: [imunify]
+      failed_when: cloudlinux_release.rc not in [0, 1]
 
-    - name: Atualizar regras ModSecurity do Imunify360
-      ansible.builtin.command:
-        cmd: imunify360-agent update --force modsec-rules
-      when: imunify_available.rc == 0
-      changed_when: true
-      tags: [imunify]
-
-    - name: Limpar cache do DNF
-      ansible.builtin.command:
-        cmd: dnf clean all
-      changed_when: true
-      tags: [cleanup]
-
-    - name: Verificar se o utilitario needs-restarting esta presente
-      ansible.builtin.shell: command -v needs-restarting || dnf needs-restarting --help >/dev/null 2>&1
-      register: needs_restarting_available
+    - name: Identificar Imunify360 instalado
+      ansible.builtin.command: rpm -q imunify360-agent
+      register: imunify_package
       changed_when: false
-      failed_when: false
-      tags: [reboot-check]
+      failed_when: imunify_package.rc not in [0, 1]
 
-    - name: Verificar necessidade de reboot
-      ansible.builtin.command:
-        cmd: dnf needs-restarting -r
-      register: reboot_status
-      changed_when: false
-      failed_when: reboot_status.rc not in [0, 1]
-      when: needs_restarting_available.rc == 0
-      tags: [reboot-check]
+    - name: Inicializar estado da manutencao
+      ansible.builtin.set_fact:
+        maintenance_status: "{{ 'AUDITORIA' if audit_only | bool else 'SUCESSO' }}"
+        maintenance_error: ""
+        dnf_changed: false
+        cpanel_executed: false
+        imunify_executed: false
 
-    - name: Obter kernel em execucao
-      ansible.builtin.command:
-        cmd: uname -r
-      register: running_kernel
-      changed_when: false
-      tags: [reboot-check]
+    - name: Atualizacoes protegidas
+      block:
+        - name: Atualizar cPanel (canal configurado no proprio servidor)
+          ansible.builtin.command: /usr/local/cpanel/scripts/upcp
+          register: upcp_result
+          changed_when: true
+          when: not audit_only | bool
 
-    - name: Obter kernel padrao de boot
-      ansible.builtin.command:
-        cmd: grubby --default-kernel
-      register: boot_kernel
-      changed_when: false
-      failed_when: false
-      tags: [reboot-check]
+        - name: Registrar execucao do cPanel
+          ansible.builtin.set_fact:
+            cpanel_executed: true
+          when: not audit_only | bool
 
-    - name: Resumo da manutencao (sem reboot automatico)
-      ansible.builtin.debug:
-        msg:
-          - "Host: {{ inventory_hostname }}"
-          - "Reboot sugerido pelo DNF: {{ 'SIM' if reboot_status.rc | default(2) == 1 else ('NAO' if reboot_status.rc | default(2) == 0 else 'NAO AVALIADO') }}"
-          - "Kernel em uso: {{ running_kernel.stdout }}"
-          - "Kernel de boot: {{ boot_kernel.stdout | default('Nao identificado') }}"
-          - "Atencao: compare os kernels e programe reboot manual quando necessario."
-      tags: [reboot-check]
+        - name: Atualizar pacotes DNF (inclui CloudLinux se instalado)
+          ansible.builtin.dnf:
+            name: '*'
+            state: latest
+            update_cache: true
+          register: dnf_result
+          when: not audit_only | bool
+
+        - name: Registrar resultado DNF
+          ansible.builtin.set_fact:
+            dnf_changed: "{{ dnf_result.changed | default(false) }}"
+          when: not audit_only | bool
+
+        - name: Atualizar regras ModSecurity do Imunify360 instalado
+          ansible.builtin.command: imunify360-agent update --force modsec-rules
+          changed_when: true
+          register: imunify_result
+          when:
+            - not audit_only | bool
+            - imunify_package.rc == 0
+
+        - name: Registrar execucao Imunify360
+          ansible.builtin.set_fact:
+            imunify_executed: true
+          when:
+            - not audit_only | bool
+            - imunify_package.rc == 0
+
+        - name: Limpar cache DNF
+          ansible.builtin.command: dnf clean all
+          changed_when: true
+          when: not audit_only | bool
+      rescue:
+        - name: Registrar erro e bloquear etapas restantes de atualizacao
+          ansible.builtin.set_fact:
+            maintenance_status: FALHA
+            maintenance_error: "{{ ansible_failed_task.name }}: {{ ansible_failed_result.msg | default('consulte saida Ansible') }}"
+      always:
+        - name: Atualizar fatos dos servicos apos manutencao
+          ansible.builtin.service_facts:
+          register: final_services
+
+        - name: Identificar verificacao de reboot disponivel
+          ansible.builtin.command: dnf needs-restarting --help
+          register: reboot_support
+          changed_when: false
+          failed_when: false
+
+        - name: Consultar necessidade de reboot
+          ansible.builtin.command: dnf needs-restarting -r
+          register: reboot_result
+          changed_when: false
+          failed_when: false
+          when: reboot_support.rc == 0
+
+        - name: Ler kernel em uso
+          ansible.builtin.command: uname -r
+          register: kernel_running
+          changed_when: false
+          failed_when: false
+
+        - name: Ler kernel padrao de boot
+          ansible.builtin.command: grubby --default-kernel
+          register: kernel_boot
+          changed_when: false
+          failed_when: false
+
+        - name: Criar diretorio local de relatorios
+          ansible.builtin.file:
+            path: "{{ playbook_dir }}/../reports"
+            state: directory
+            mode: '0700'
+          delegate_to: localhost
+          become: false
+
+        - name: Salvar relatorio JSON somente na maquina local
+          ansible.builtin.copy:
+            dest: "{{ playbook_dir }}/../reports/{{ inventory_hostname | regex_replace('[^a-zA-Z0-9_.-]', '_') }}-{{ ansible_date_time.iso8601_basic }}.json"
+            mode: '0600'
+            content: "{{ report_payload | to_nice_json }}\n"
+          vars:
+            report_payload:
+              host: "{{ inventory_hostname }}"
+              started_at_utc: "{{ ansible_date_time.iso8601 }}"
+              mode: "{{ 'audit' if audit_only | bool else 'maintenance' }}"
+              status: "{{ maintenance_status }}"
+              failure: "{{ maintenance_error }}"
+              cloudlinux: "{{ cloudlinux_release.stdout | default('nao identificado') }}"
+              imunify360: "{{ imunify_package.stdout | default('nao instalado') }}"
+              cpanel_executed: "{{ cpanel_executed }}"
+              dnf_changed: "{{ dnf_changed }}"
+              imunify_rules_updated: "{{ imunify_executed }}"
+              running_kernel: "{{ kernel_running.stdout | default('indisponivel') }}"
+              boot_kernel: "{{ kernel_boot.stdout | default('indisponivel') }}"
+              reboot_check_rc: "{{ reboot_result.rc | default('nao executado') }}"
+              reboot_check_note: "0 = nao indicado; 1 = indicado; outros = inconclusivo"
+              services_before: "{{ initial_services.ansible_facts.services | default({}) | dict2items | selectattr('key', 'in', managed_services) | items2dict }}"
+              services_after: "{{ final_services.ansible_facts.services | default({}) | dict2items | selectattr('key', 'in', managed_services) | items2dict }}"
+          delegate_to: localhost
+          become: false
+
+        - name: Mostrar resultado e reboot
+          ansible.builtin.debug:
+            msg:
+              - "Host: {{ inventory_hostname }} | Estado: {{ maintenance_status }}"
+              - "CloudLinux: {{ cloudlinux_release.stdout | default('nao identificado') }}"
+              - "Reboot DNF: {{ 'SIM' if (reboot_result.rc | default(2)) == 1 else ('NAO' if (reboot_result.rc | default(2)) == 0 else 'INCONCLUSIVO') }}"
+              - "Kernel atual: {{ kernel_running.stdout | default('indisponivel') }}"
+              - "Kernel boot: {{ kernel_boot.stdout | default('indisponivel') }}"
+              - "Relatorio local: reports/"
+
+    - name: Encerrar com falha quando houve erro de atualizacao
+      ansible.builtin.fail:
+        msg: "{{ maintenance_error }}"
+      when: maintenance_status == 'FALHA'
