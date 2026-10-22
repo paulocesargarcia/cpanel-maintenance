@@ -1,0 +1,5 @@
+---
+# Auditoria somente leitura. Nao executa upcp, dnf upgrade ou alteracoes remotas.
+- import_playbook: maintenance.yml
+  vars:
+    audit_only: true
