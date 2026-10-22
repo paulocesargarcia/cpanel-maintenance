@@ -87,17 +87,6 @@
 
     - name: Atualizacoes protegidas
       block:
-        - name: Atualizar cPanel (canal configurado no proprio servidor)
-          ansible.builtin.command: /usr/local/cpanel/scripts/upcp
-          register: upcp_result
-          changed_when: true
-          when: not audit_only | bool
-
-        - name: Registrar execucao do cPanel
-          ansible.builtin.set_fact:
-            cpanel_executed: true
-          when: not audit_only | bool
-
         - name: Atualizar DNF no EL8 pelo executavel do sistema
           ansible.builtin.command:
             argv:
@@ -123,6 +112,17 @@
         - name: Registrar resultado DNF
           ansible.builtin.set_fact:
             dnf_changed: "{{ (dnf_el8_result.changed | default(false)) if ansible_facts['distribution_major_version'] == '8' else (dnf_result.changed | default(false)) }}"
+          when: not audit_only | bool
+
+        - name: Atualizar cPanel (canal configurado no proprio servidor)
+          ansible.builtin.command: /usr/local/cpanel/scripts/upcp
+          register: upcp_result
+          changed_when: true
+          when: not audit_only | bool
+
+        - name: Registrar execucao do cPanel
+          ansible.builtin.set_fact:
+            cpanel_executed: true
           when: not audit_only | bool
 
         - name: Atualizar regras ModSecurity do Imunify360 instalado
