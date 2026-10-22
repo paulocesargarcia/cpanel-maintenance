@@ -20,7 +20,7 @@ Os pacotes CloudLinux sao atualizados por DNF conforme repositorios configurados
 
 ## Relatorios
 
-Gerados no controlador em `reports/HOST-DATA.json`, com permissao `0600`. O diretorio tem permissao `0700` e esta no `.gitignore`. Contem status de execucao, CloudLinux, Imunify360, kernel/reboot e estados de servicos antes/depois.
+Gerados no controlador em `reports/HOST-DATA.json`, com permissao `0600`. O diretorio tem permissao `0700` e esta no `.gitignore`. Contem status de execucao, CloudLinux, Imunify360, kernel/reboot, estados de servicos antes/depois e `failed_services` (servicos previamente ativos que pararam). Falhas de atualizacao ou regressao de servicos geram status `FALHA`.
 
 Os servicos verificados por coleta de fatos incluem cPanel, Apache, LiteSpeed, MariaDB/MySQL, Exim, Dovecot e Imunify360, quando detectados. Nao reinicia ou repara servicos automaticamente.
 
