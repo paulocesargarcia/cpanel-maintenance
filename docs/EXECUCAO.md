@@ -31,3 +31,21 @@ O retorno do reboot e interpretado como 0 (nao indicado), 1 (indicado), demais (
 Ansible com colecao builtin, acesso SSH por chave e Python compatível nos hosts. O playbook usa `serial: 1` e `any_errors_fatal: true`. Nunca execute atualizacoes sem revisar os commits. Nenhum reboot automatico esta implementado.
 
 Alias do ZSH nao e interpretado como alias SSH. Use nome DNS ou defina `Host` no seu `~/.ssh/config`.
+
+## Compatibilidade Python e DNF (AlmaLinux/CloudLinux 8)
+
+O playbook inicia com uma deteccao via `raw` (independente de Python remoto), selecionando interpretador Python compativel com Ansible 2.17 (3.7 a 3.12). Isso nao seleciona cegamente a versao mais nova: prioriza candidatos compatíveis.
+
+Se existir apenas Python 3.6, a execucao para **antes de alterar o servidor**. No AlmaLinux 8.10, instale o Python 3.11 em janela adequada (sem substituir o Python do sistema):
+
+```bash
+ssh -p 22022 root@srv326.maxdominios.com 'dnf install python3.11'
+```
+
+Esta instalacao e **manual**, nao e feita pela auditoria nem pelo playbook. Depois execute novamente. O Python 3.6 do sistema deve continuar intacto.
+
+Em EL8, a manutencao usa `/usr/bin/dnf upgrade -y` executado pelo modulo `command` sob o Python selecionado: o proprio DNF utiliza suas bibliotecas nativas do sistema. Em EL9+, utiliza `ansible.builtin.dnf`.
+
+Auditoria, verificacoes e relatórios nao instalam pacotes. Nao existe reboot automatico. O relatorio registra `python_interpreter` e `dnf_method`.
+
+**Limitacao:** a selecao cobre caminhos comuns instalados. Interpretadores em locais personalizados exigem ajuste adicional. Requisitos de Python tambem dependem da versao de ansible-core instalada na estacao controladora.
