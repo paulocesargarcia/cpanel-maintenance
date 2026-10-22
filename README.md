@@ -7,13 +7,13 @@ Padroes definidos no `ansible.cfg`: `root`, SSH `22022`, descoberta automatica d
 ## Auditoria sem alteracoes remotas
 
 ```bash
-ansible-playbook -i 'vps3015.maxdominios.com,' playbooks/audit.yml
+ansible-playbook -i 'lab01,' playbooks/audit.yml
 ```
 
 ## Manutencao completa
 
 ```bash
-ansible-playbook -i 'vps3015.maxdominios.com,' playbooks/maintenance.yml
+ansible-playbook -i 'lab01,' playbooks/maintenance.yml
 ```
 
 A virgula no inventario inline e obrigatoria. Rode da raiz do repositorio para carregar `ansible.cfg`.
