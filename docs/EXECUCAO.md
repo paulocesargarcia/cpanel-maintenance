@@ -49,3 +49,28 @@ Em EL8, a manutencao usa `/usr/bin/dnf upgrade -y` executado pelo modulo `comman
 Auditoria, verificacoes e relatórios nao instalam pacotes. Nao existe reboot automatico. O relatorio registra `python_interpreter` e `dnf_method`.
 
 **Limitacao:** a selecao cobre caminhos comuns instalados. Interpretadores em locais personalizados exigem ajuste adicional. Requisitos de Python tambem dependem da versao de ansible-core instalada na estacao controladora.
+
+
+## Opcional: instalar Python 3.11 no AlmaLinux 8
+
+Se o Ansible identificar apenas Python 3.6 no servidor, pode-se instalar **opcionalmente** um Python adicional, sem substituir o Python do sistema. Primeiro, confirme a distribuição e simule a transação:
+
+```bash
+ssh -p 22022 root@srv326.maxdominios.com 'cat /etc/os-release; dnf install --assumeno python3.11'
+```
+
+Revise a lista de pacotes, especialmente remoções, substituições e dependências. Se estiver adequada e houver janela de manutenção, execute:
+
+```bash
+ssh -p 22022 root@srv326.maxdominios.com 'dnf install python3.11'
+```
+
+Confirme que os interpretadores do sistema foram preservados:
+
+```bash
+ssh -p 22022 root@srv326.maxdominios.com '/usr/bin/python3 --version; /usr/libexec/platform-python --version; /usr/bin/python3.11 --version'
+```
+
+A instalação não deve alterar `/usr/bin/python3`, `/usr/libexec/platform-python`, links simbólicos, `PATH` global ou os Python utilizados pelo cPanel/CloudLinux. **Não execute alternativas ou comandos para tornar o 3.11 padrão.** O script Ansible apenas detecta e utiliza o interpretador adicional quando compatível; **não instala Python automaticamente**. Após a instalação, teste primeiro `playbooks/audit.yml` antes da manutenção.
+
+Esta opção é específica para AlmaLinux/CloudLinux 8 com pacotes disponíveis nos repositórios suportados. Não presuma impacto zero: consulte previamente a transação DNF.
