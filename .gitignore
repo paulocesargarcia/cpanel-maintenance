@@ -1,0 +1,14 @@
+# Inventarios e configuracoes locais (nunca versionar)
+inventory/
+inventories/
+hosts.ini
+hosts.yml
+hosts.yaml
+*.retry
+logs/
+*.log
+.env
+*.key
+*.pem
+*.vault
+.vault_pass*
