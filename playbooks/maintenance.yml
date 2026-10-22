@@ -1,7 +1,7 @@
 ---
 - name: Manutencao ou auditoria de servidores cPanel
   hosts: all
-  gather_facts: true
+  gather_facts: false
   become: true
   serial: 1
   any_errors_fatal: true
@@ -16,6 +16,37 @@
       - exim.service
       - dovecot.service
       - imunify360.service
+  pre_tasks:
+    - name: Descobrir Python compativel sem depender do Python remoto
+      ansible.builtin.raw: |
+        for p in /usr/bin/python3.12 /usr/bin/python3.11 /usr/bin/python3.10 /usr/bin/python3.9 /usr/bin/python3.8 /usr/bin/python3.7 /usr/libexec/platform-python /usr/bin/python3; do
+          if [ -x "$p" ] && "$p" -c 'import sys; sys.exit(0 if (3,7) <= sys.version_info[:2] <= (3,12) else 1)' >/dev/null 2>&1; then
+            echo "$p"
+            exit 0
+          fi
+        done
+        exit 42
+      register: python_probe
+      changed_when: false
+      failed_when: false
+
+    - name: Bloquear servidor sem Python suportado pelo Ansible 2.17
+      ansible.builtin.assert:
+        that:
+          - python_probe.rc == 0
+          - (python_probe.stdout_lines | default([]) | length) > 0
+        fail_msg: >-
+          Nenhum Python remoto compatível com Ansible 2.17 (3.7 a 3.12).
+          Em AlmaLinux 8, instale python3.11 em janela apropriada usando
+          dnf install python3.11; não substitua /usr/bin/python3 nem platform-python.
+
+    - name: Selecionar Python remoto encontrado
+      ansible.builtin.set_fact:
+        ansible_python_interpreter: "{{ python_probe.stdout_lines | map('trim') | reject('equalto', '') | first }}"
+
+    - name: Coletar fatos usando Python selecionado
+      ansible.builtin.setup:
+
   tasks:
     - name: Validar plataforma e instalacao cPanel
       block:
@@ -67,17 +98,31 @@
             cpanel_executed: true
           when: not audit_only | bool
 
-        - name: Atualizar pacotes DNF (inclui CloudLinux se instalado)
+        - name: Atualizar DNF no EL8 pelo executavel do sistema
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/dnf
+              - upgrade
+              - -y
+          register: dnf_el8_result
+          changed_when: true
+          when:
+            - not audit_only | bool
+            - ansible_facts['distribution_major_version'] == '8'
+
+        - name: Atualizar pacotes DNF em EL9 ou superior
           ansible.builtin.dnf:
             name: '*'
             state: latest
             update_cache: true
           register: dnf_result
-          when: not audit_only | bool
+          when:
+            - not audit_only | bool
+            - ansible_facts['distribution_major_version'] != '8'
 
         - name: Registrar resultado DNF
           ansible.builtin.set_fact:
-            dnf_changed: "{{ dnf_result.changed | default(false) }}"
+            dnf_changed: "{{ (dnf_el8_result.changed | default(false)) if ansible_facts['distribution_major_version'] == '8' else (dnf_result.changed | default(false)) }}"
           when: not audit_only | bool
 
         - name: Atualizar regras ModSecurity do Imunify360 instalado
@@ -164,6 +209,8 @@
           vars:
             report_payload:
               host: "{{ inventory_hostname }}"
+              python_interpreter: "{{ ansible_python_interpreter }}"
+              dnf_method: "{{ 'system-cli' if ansible_facts['distribution_major_version'] == '8' else 'ansible.builtin.dnf' }}"
               started_at_utc: "{{ ansible_date_time.iso8601 }}"
               mode: "{{ 'audit' if audit_only | bool else 'maintenance' }}"
               status: "{{ maintenance_status }}"
