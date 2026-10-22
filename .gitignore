@@ -1,12 +1,13 @@
-# Inventarios e configuracoes locais (nunca versionar)
+# Dados e credenciais locais
 inventory/
 inventories/
 hosts.ini
 hosts.yml
 hosts.yaml
-*.retry
+reports/
 logs/
 *.log
+*.retry
 .env
 *.key
 *.pem
