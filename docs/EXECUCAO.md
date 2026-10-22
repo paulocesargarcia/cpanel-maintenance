@@ -4,14 +4,14 @@ Nao existe inventario versionado. O Ansible roda na sua maquina com chaves SSH l
 
 ```bash
 git pull --ff-only
-ansible-playbook -i 'vps3015.maxdominios.com,' playbooks/audit.yml --syntax-check
-ansible-playbook -i 'vps3015.maxdominios.com,' playbooks/audit.yml
+ansible-playbook -i 'lab01,' playbooks/audit.yml --syntax-check
+ansible-playbook -i 'lab01,' playbooks/audit.yml
 ```
 
 A auditoria **nao instala nem atualiza** pacotes, nao modifica configuracoes remotas e nao reinicia servicos. Requer root para descobrir servicos/estado do sistema. Para executar atualizacoes reais, com backups e janela de manutencao:
 
 ```bash
-ansible-playbook -i 'vps3015.maxdominios.com,' playbooks/maintenance.yml
+ansible-playbook -i 'lab01,' playbooks/maintenance.yml
 ```
 
 Etapas da manutencao: validar cPanel e sistema; coletar servicos antes; identificar CloudLinux e Imunify360; atualizar DNF incluindo pacotes CloudLinux presentes; executar upcp; atualizar regras ModSecurity do Imunify360 quando instalado; limpar cache DNF; coletar servicos depois; verificar reboot/kernel; gerar relatorio local.
