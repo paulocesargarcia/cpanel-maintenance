@@ -2,7 +2,7 @@
 
 ## Modelo de acesso
 
-O repositorio contem apenas automacao e documentacao. Nao ha inventario versionado. O comando `-i 'hostname,'` informa os servidores em tempo de execucao. Use chaves SSH existentes na sua maquina e valide a identidade SSH dos hosts.
+O repositorio contem apenas automacao e documentacao. Nao ha inventario versionado. O ansible.cfg usa remote_user=root, remote_port=22022 e interpreter_python=auto_silent. O comando `-i 'hostname,'` informa os servidores em tempo de execucao. Use chaves SSH existentes na sua maquina e valide a identidade SSH dos hosts.
 
 Aliases definidos somente em `~/.zshrc` (por exemplo, `alias vps3015="ssh -p22022 root@vps3015.maxdominios.com"`) **nao sao interpretados pelo Ansible**. Use hostname/porta/usuario no comando ou configure o alias em `~/.ssh/config`.
 
@@ -29,8 +29,8 @@ Antes de executar em producao, revise alteracoes do projeto e prefira um commit/
 
 ```bash
 ansible --version
-ansible-playbook -i 'vps3015.maxdominios.com,' -u root -e 'ansible_port=22022' playbooks/maintenance.yml --syntax-check
-ansible all -i 'vps3015.maxdominios.com,' -u root -e 'ansible_port=22022' -m ping
+ansible-playbook -i 'vps3015.maxdominios.com,' playbooks/maintenance.yml --syntax-check
+ansible all -i 'vps3015.maxdominios.com,' -m ping
 ```
 
 A virgula apos o hostname e obrigatoria em inventarios inline. `pong` valida SSH/autenticacao/Python remoto, mas nao confirma sucesso das atualizacoes.
@@ -40,8 +40,6 @@ A virgula apos o hostname e obrigatoria em inventarios inline. `pong` valida SSH
 ```bash
 ansible-playbook \
   -i 'vps3015.maxdominios.com,' \
-  -u root \
-  -e 'ansible_port=22022' \
   playbooks/maintenance.yml
 ```
 
@@ -52,7 +50,7 @@ Execute somente em janela apropriada: o playbook **faz atualizacoes reais** de c
 As tags disponiveis sao `cpanel`, `system`, `imunify`, `cleanup` e `reboot-check`.
 
 ```bash
-ansible-playbook -i 'vps3015.maxdominios.com,' -u root -e 'ansible_port=22022' playbooks/maintenance.yml --tags reboot-check
+ansible-playbook -i 'vps3015.maxdominios.com,' playbooks/maintenance.yml --tags reboot-check
 ```
 
 As validacoes iniciais sem tags nao sao executadas quando voce seleciona somente uma tag; use a execucao completa para a manutencao padrao.
@@ -60,12 +58,16 @@ As validacoes iniciais sem tags nao sao executadas quando voce seleciona somente
 ## Diversos servidores sem inventario versionado
 
 ```bash
-ansible-playbook -i 'ns1003.maxdominios.com,ns1009.maxdominios.com,' -u root -e 'ansible_port=22022' playbooks/maintenance.yml
+ansible-playbook -i 'ns1003.maxdominios.com,ns1009.maxdominios.com,' playbooks/maintenance.yml
 ```
 
 O playbook usa `serial: 1` e `any_errors_fatal: true`: atualiza um servidor por vez e para em caso de erro. O exemplo pressupoe a mesma porta/usuario nos dois destinos.
 
 Opcionalmente, guarde um inventario **somente na maquina local**, fora do repositorio, e indique seu caminho com `-i`.
+
+## Configuracao padrao
+
+No diretorio do projeto, confira os parametros carregados com `ansible-config dump --only-changed`. O arquivo ansible.cfg define root e porta 22022; excecoes podem ser configuradas localmente.
 
 ## Python
 
