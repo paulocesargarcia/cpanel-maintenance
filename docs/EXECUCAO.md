@@ -39,7 +39,7 @@ O playbook inicia com uma deteccao via `raw` (independente de Python remoto), se
 Se existir apenas Python 3.6, a execucao para **antes de alterar o servidor**. No AlmaLinux 8.10, instale o Python 3.11 em janela adequada (sem substituir o Python do sistema):
 
 ```bash
-ssh -p 22022 root@srv326.maxdominios.com 'dnf install python3.11'
+ssh -p 22022 root@lab01 'dnf install python3.11'
 ```
 
 Esta instalacao e **manual**, nao e feita pela auditoria nem pelo playbook. Depois execute novamente. O Python 3.6 do sistema deve continuar intacto.
@@ -56,19 +56,19 @@ Auditoria, verificacoes e relatórios nao instalam pacotes. Nao existe reboot au
 Se o Ansible identificar apenas Python 3.6 no servidor, pode-se instalar **opcionalmente** um Python adicional, sem substituir o Python do sistema. Primeiro, confirme a distribuição e simule a transação:
 
 ```bash
-ssh -p 22022 root@srv326.maxdominios.com 'cat /etc/os-release; dnf install --assumeno python3.11'
+ssh -p 22022 root@lab01 'cat /etc/os-release; dnf install --assumeno python3.11'
 ```
 
 Revise a lista de pacotes, especialmente remoções, substituições e dependências. Se estiver adequada e houver janela de manutenção, execute:
 
 ```bash
-ssh -p 22022 root@srv326.maxdominios.com 'dnf install python3.11'
+ssh -p 22022 root@lab01 'dnf install python3.11'
 ```
 
 Confirme que os interpretadores do sistema foram preservados:
 
 ```bash
-ssh -p 22022 root@srv326.maxdominios.com '/usr/bin/python3 --version; /usr/libexec/platform-python --version; /usr/bin/python3.11 --version'
+ssh -p 22022 root@lab01 '/usr/bin/python3 --version; /usr/libexec/platform-python --version; /usr/bin/python3.11 --version'
 ```
 
 A instalação não deve alterar `/usr/bin/python3`, `/usr/libexec/platform-python`, links simbólicos, `PATH` global ou os Python utilizados pelo cPanel/CloudLinux. **Não execute alternativas ou comandos para tornar o 3.11 padrão.** O script Ansible apenas detecta e utiliza o interpretador adicional quando compatível; **não instala Python automaticamente**. Após a instalação, teste primeiro `playbooks/audit.yml` antes da manutenção.
